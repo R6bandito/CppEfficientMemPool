@@ -27,11 +27,11 @@ SOFTWARE.
 #include <climits>
 #include <cstddef>
 #include <vector>
+#include <cassert>
 
-#define DISALLOW_AND_ASSIGN(TypeName,Type) \
-  MemoryPool(const TypeName &) = delete \
-  MemoryPool& operator=(const TypeName &) = delete \
-  MemoryPool(const MemoryPool<Type> &) = delete \
+#define DISALLOW_AND_ASSIGN(TypeName) \
+  MemoryPool(const TypeName &) = delete; \
+  MemoryPool& operator=(const TypeName &) = delete; \
 
 template<class T> 
 class MemoryPool {
@@ -55,22 +55,27 @@ class MemoryPool {
   pointer address(reference __X) const noexcept;
   const_pointer address(const_reference __X) const noexcept;
 
-  pointer allocate (size_type __n = 1, const void* = nullptr);
+  pointer allocate (size_type __n = 1, const void* __p = nullptr);
   void deallocate(pointer __p, size_type __n = 1);
 
   void allocNumSet(size_type __n);
+  void alignasNumSet(size_type __n);
+
  private:
   template<typename Type>
-  DISALLOW_AND_ASSIGN(MemoryPool,Type);
+  MemoryPool(const MemoryPool<Type> &) = delete;
+  DISALLOW_AND_ASSIGN(MemoryPool);
 
   struct _Slot{
     _Slot* next;
   };
   _Slot *freelist;
-  std::vector<void *> Block_Container;
+  std::vector<_Slot *> Block_Container;
   size_type Object_Size;
   size_type Object_Num;
+  size_type alignas_Num;
 
   void Block_Alloc();
+  size_type padCaculate(void *Block_ptr);
 };
 #endif // __MEMORY_POOL_H__
