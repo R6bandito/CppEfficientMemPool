@@ -3,8 +3,15 @@
 
 template<typename T>
 MemoryPool<T>::MemoryPool() noexcept
- :freelist(nullptr),Object_Size(sizeof(value_type)),Object_Num(256),alignas_Num(8)
+ :freelist(nullptr),Object_Size(sizeof(value_type)),Object_Num(128),alignas_Num(8)
   { Block_Alloc(); }
+
+template<typename T>
+MemoryPool<T>::~MemoryPool() {
+  for(auto it : Block_Container) {
+    delete it;
+  }
+}
 
 template<typename T>
 MemoryPool<T>::MemoryPool(MemoryPool &&_memory_pool) noexcept {
@@ -63,22 +70,30 @@ void MemoryPool<T>::alignasNumSet(size_type __n) {
 
 template<typename T>
 void MemoryPool<T>::Block_Alloc() {
-  void* block_ptr = ::operator new(this->Object_Size * this->Object_Num, std::nothrow);
+  size_type Block_size = this->Object_Size * this->Object_Num;
+  void* block_ptr = ::operator new(Block_size, std::nothrow);
+  char *_Block_tail = static_cast<char *>(block_ptr) + Block_size;  //内存块尾
   if (!block_ptr) { }
-  auto p_block_ptr = (static_cast<char *>(block_ptr) + padCaculate(block_ptr));  //内存对齐
-  for(int i = 0; i < Object_Num; ++i) {
-    void *slots = static_cast<char *>(p_block_ptr) + (Object_Size * i);
+  size_type padPonter = padCaculate(block_ptr);
+  auto _Block_head = (static_cast<char *>(block_ptr) + padPonter);  //内存对齐
+  _Block_tail -= (alignas_Num - padPonter) % alignas_Num;
+  size_type real_obj_Num = (_Block_tail - _Block_head) / Object_Size;
+
+  assert(real_obj_Num > 0);
+
+  for(int i = 0; i < real_obj_Num; ++i) {
+    void *slots = static_cast<char *>(_Block_head) + (Object_Size * i);
     _Slot *Node = static_cast<_Slot *>(slots);
     Node->next = this->freelist;
     this->freelist = Node;
   }
-  this->Block_Container.push_back(reinterpret_cast<_Slot *>(p_block_ptr));
+  this->Block_Container.push_back(reinterpret_cast<char *>(_Block_head));
 }
 
 template <typename T>
 inline typename MemoryPool<T>::size_type
 MemoryPool<T>::padCaculate(void *Block_ptr) {
-  bool isAligna = reinterpret_cast<uintptr_t>(Block_ptr) % alignas_Num;
+  size_type isAligna = reinterpret_cast<uintptr_t>(Block_ptr) % alignas_Num;
   if (isAligna) 
     return (alignas_Num - isAligna);
   else 
@@ -86,25 +101,23 @@ MemoryPool<T>::padCaculate(void *Block_ptr) {
 }
 
 template <typename T>
-inline typename MemoryPool<T>::pointer
+typename MemoryPool<T>::pointer
 MemoryPool<T>::allocate(size_type /*__n*/, const void * /*__p*/) {
-  bool Alloc_Flag = true;
-  for(auto &it : Block_Container) {
-    if (it != nullptr) {
-      _Slot *Node = it;
-      assert(Node != nullptr);
-      if (Node != nullptr) {
-        Alloc_Flag = false;  //不用再拓展内存块
-        it = Node->next;
-        return reinterpret_cast<pointer>(Node);
-      }
-      else { }
-    }
-  }
-  if (Alloc_Flag) {
+  _Slot *Node = this->freelist;
+  if (this->freelist->next == nullptr) {
     Block_Alloc();
-    return reinterpret_cast<pointer>(this->freelist);
   }
+  else { this->freelist = this->freelist->next;}
+  return reinterpret_cast<pointer>(Node);
+}
 
-  return nullptr;
+template<typename T>
+void MemoryPool<T>::deallocate(pointer __p, size_type /*__n*/) {
+  if (__p != nullptr) {
+    _Slot* Node = reinterpret_cast<_Slot *>(__p);
+    Node->next = this->freelist;
+    this->freelist = Node;
+    /*std::cout << "deallocate. back to freelist" << std::endl;*/ 
+  }
+  else { }
 }

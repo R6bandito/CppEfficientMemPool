@@ -51,6 +51,7 @@ class MemoryPool {
   MemoryPool() noexcept;
   MemoryPool(MemoryPool &&) noexcept;
   MemoryPool& operator=(MemoryPool &&) noexcept;
+  ~MemoryPool();
 
   pointer address(reference __X) const noexcept;
   const_pointer address(const_reference __X) const noexcept;
@@ -69,8 +70,8 @@ class MemoryPool {
   struct _Slot{
     _Slot* next;
   };
+  std::vector<char *> Block_Container;
   _Slot *freelist;
-  std::vector<_Slot *> Block_Container;
   size_type Object_Size;
   size_type Object_Num;
   size_type alignas_Num;
